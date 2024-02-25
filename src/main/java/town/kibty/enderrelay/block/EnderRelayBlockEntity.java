@@ -1,9 +1,9 @@
 package town.kibty.enderrelay.block;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.util.math.BlockPos;
 import town.kibty.enderrelay.EnderRelay;
 
 public class EnderRelayBlockEntity extends BlockEntity {
@@ -18,7 +18,7 @@ public class EnderRelayBlockEntity extends BlockEntity {
     }
 
     @Override
-    public void load(CompoundTag nbt) {
+    public void readNbt(NbtCompound nbt) {
         if (nbt.contains(DIMENSION_ID_KEY)) dimension = nbt.getString(DIMENSION_ID_KEY);
         if (nbt.contains(POSITION_KEY)) {
             int[] coordsArr = nbt.getIntArray(POSITION_KEY);
@@ -27,15 +27,15 @@ public class EnderRelayBlockEntity extends BlockEntity {
             z = coordsArr[2];
         }
 
-        super.load(nbt);
+        super.readNbt(nbt);
     }
 
     @Override
-    protected void saveAdditional(CompoundTag nbt) {
+    protected void writeNbt(NbtCompound nbt) {
         if (dimension != null) nbt.putString(DIMENSION_ID_KEY, dimension);
         if (x != null) nbt.putIntArray(POSITION_KEY, new int[] { x, y, z });
 
-        super.saveAdditional(nbt);
+        super.writeNbt(nbt);
     }
 
     public boolean hasNoLocation() {

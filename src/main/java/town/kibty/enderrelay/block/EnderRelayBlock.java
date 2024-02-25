@@ -1,181 +1,181 @@
 package town.kibty.enderrelay.block;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
-import net.minecraft.tags.FluidTags;
-import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
-import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.CompassItem;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.enchantment.EnchantmentHelper;
-import net.minecraft.world.item.enchantment.Enchantments;
-import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.Explosion;
-import net.minecraft.world.level.ExplosionDamageCalculator;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.EntityBlock;
-import net.minecraft.world.level.block.RespawnAnchorBlock;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.state.properties.BooleanProperty;
-import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
-import net.minecraft.world.level.gameevent.GameEvent;
-import net.minecraft.world.level.material.FluidState;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockEntityProvider;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
+import net.minecraft.block.RespawnAnchorBlock;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.enchantment.Enchantments;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.fluid.FluidState;
+import net.minecraft.item.CompassItem;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.particle.ParticleTypes;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
+import net.minecraft.state.StateManager;
+import net.minecraft.state.property.BooleanProperty;
+import net.minecraft.tag.FluidTags;
+import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.random.Random;
+import net.minecraft.world.BlockView;
+import net.minecraft.world.World;
+import net.minecraft.world.dimension.DimensionTypes;
+import net.minecraft.world.event.GameEvent;
+import net.minecraft.world.explosion.Explosion;
+import net.minecraft.world.explosion.ExplosionBehavior;
 
-public class EnderRelayBlock extends Block implements EntityBlock {
-    public static final BooleanProperty CHARGED = BooleanProperty.create("charged");
+public class EnderRelayBlock extends Block implements BlockEntityProvider {
+    public static final BooleanProperty CHARGED = BooleanProperty.of("charged");
 
-    public EnderRelayBlock(Properties properties) {
+    public EnderRelayBlock(Settings properties) {
         super(properties);
-        this.registerDefaultState(this.defaultBlockState().setValue(CHARGED, false));
+        this.setDefaultState(this.getDefaultState().with(CHARGED, false));
     }
 
-    public boolean hasAnalogOutputSignal(BlockState blockState) {return true;}
+    public boolean hasComparatorOutput(BlockState blockState) {return true;}
     public static boolean getChargeLevel(BlockState blockState) {
-        return blockState.getValue(CHARGED);
+        return blockState.get(CHARGED);
     }
 
     @Override
-    public int getAnalogOutputSignal(BlockState blockState, Level level, BlockPos blockPos) {
+    public int getComparatorOutput(BlockState blockState, World level, BlockPos blockPos) {
         return getChargeLevel(blockState) ? 15 : 0;
     }
 
     @Override
-    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+    protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
         builder.add(CHARGED);
     }
 
     @Override
-    public @NotNull InteractionResult use(BlockState blockState, Level level, BlockPos blockPos, Player player, InteractionHand interactionHand, BlockHitResult blockHitResult) {
-        ItemStack itemInHand = player.getItemInHand(interactionHand);
-        if (itemInHand.is(Items.END_CRYSTAL) && !blockState.getValue(CHARGED)) {
+    public @NotNull ActionResult onUse(BlockState blockState, World level, BlockPos blockPos, PlayerEntity player, Hand interactionHand, BlockHitResult blockHitResult) {
+        ItemStack itemInHand = player.getStackInHand(interactionHand);
+        if (itemInHand.isOf(Items.END_CRYSTAL) && !blockState.get(CHARGED)) {
             light(player, level, blockPos, blockState);
-            if (!player.getAbilities().instabuild) {
-                itemInHand.shrink(1);
+            if (!player.getAbilities().creativeMode) {
+                itemInHand.decrement(1);
             }
-            return InteractionResult.sidedSuccess(level.isClientSide);
+            return ActionResult.success(level.isClient);
         }
 
-        if (level.dimensionTypeId() == BuiltinDimensionTypes.END) {
+        if (level.getDimensionKey() == DimensionTypes.THE_END) {
             BlockEntity blockEntity = level.getBlockEntity(blockPos);
-            if (!(blockEntity instanceof EnderRelayBlockEntity enderRelayEntity)) return InteractionResult.FAIL;
+            if (!(blockEntity instanceof EnderRelayBlockEntity enderRelayEntity)) return ActionResult.FAIL;
 
-            if (!blockState.getValue(CHARGED)) return InteractionResult.FAIL;
-            BlockState newState = blockState.setValue(CHARGED, false);
-            level.setBlock(blockPos, newState, 3);
-            level.gameEvent(GameEvent.BLOCK_CHANGE, blockPos, GameEvent.Context.of(player, newState));
+            if (!blockState.get(CHARGED)) return ActionResult.FAIL;
+            BlockState newState = blockState.with(CHARGED, false);
+            level.setBlockState(blockPos, newState, 3);
+            level.emitGameEvent(GameEvent.BLOCK_CHANGE, blockPos, GameEvent.Emitter.of(player, newState));
 
-            if(!level.isClientSide) {
+            if(!level.isClient) {
                 if (enderRelayEntity.hasNoLocation()) {
-                    player.displayClientMessage(
-                            Component.translatable("enderrelay.unknown_destination"),
+                    player.sendMessage(
+                            Text.translatable("enderrelay.unknown_destination"),
                             false
                     );
-                    return InteractionResult.FAIL;
+                    return ActionResult.FAIL;
                 }
-                sendToLocation((ServerPlayer) player, (ServerLevel) level, enderRelayEntity.getX(), enderRelayEntity.getY(), enderRelayEntity.getZ());
+                sendToLocation((ServerPlayerEntity) player, (ServerWorld) level, enderRelayEntity.getX(), enderRelayEntity.getY(), enderRelayEntity.getZ());
             }
-            return InteractionResult.sidedSuccess(level.isClientSide);
-        } else if (blockState.getValue(CHARGED) && !level.isClientSide) {
+            return ActionResult.success(level.isClient);
+        } else if (blockState.get(CHARGED) && !level.isClient) {
             explode(blockState, level, blockPos);
-            return InteractionResult.sidedSuccess(false);
+            return ActionResult.success(false);
         }
 
-        return InteractionResult.FAIL;
+        return ActionResult.FAIL;
     }
 
     // Copied from RespawnAnchorBlock for exact same functionality: downdated? to 1.19 respawn anchor
-    private void explode(BlockState blockState, Level level, final BlockPos blockPos) {
+    private void explode(BlockState blockState, World level, final BlockPos blockPos) {
         level.removeBlock(blockPos, false);
-        Stream<Direction> var10000 = Direction.Plane.HORIZONTAL.stream();
+        Stream<Direction> var10000 = Direction.Type.HORIZONTAL.stream();
         Objects.requireNonNull(blockPos);
-        boolean bl = var10000.map(blockPos::relative).anyMatch((blockPosx) -> isWaterThatWouldFlow(blockPosx, level));
-        final boolean bl2 = bl || level.getFluidState(blockPos.above()).is(FluidTags.WATER);
-        ExplosionDamageCalculator explosionDamageCalculator = new ExplosionDamageCalculator() {
-            public @NotNull Optional<Float> getBlockExplosionResistance(Explosion explosion, BlockGetter blockGetter, BlockPos blockPosx, BlockState blockState, FluidState fluidState) {
-                return blockPosx.equals(blockPos) && bl2 ? Optional.of(Blocks.WATER.getExplosionResistance()) : super.getBlockExplosionResistance(explosion, blockGetter, blockPosx, blockState, fluidState);
+        boolean bl = var10000.map(blockPos::offset).anyMatch((blockPosx) -> isWaterThatWouldFlow(blockPosx, level));
+        final boolean bl2 = bl || level.getFluidState(blockPos.up()).isIn(FluidTags.WATER);
+        ExplosionBehavior explosionDamageCalculator = new ExplosionBehavior() {
+            public @NotNull Optional<Float> getBlastResistance(Explosion explosion, BlockView blockGetter, BlockPos blockPosx, BlockState blockState, FluidState fluidState) {
+                return blockPosx.equals(blockPos) && bl2 ? Optional.of(Blocks.WATER.getBlastResistance()) : super.getBlastResistance(explosion, blockGetter, blockPosx, blockState, fluidState);
             }
         };
-        level.explode(null, DamageSource.badRespawnPointExplosion(), explosionDamageCalculator, (double)blockPos.getX() + 0.5, (double)blockPos.getY() + 0.5, (double)blockPos.getZ() + 0.5, 5.0F, true, Explosion.BlockInteraction.DESTROY);
+        level.createExplosion(null, DamageSource.badRespawnPoint(), explosionDamageCalculator, (double)blockPos.getX() + 0.5, (double)blockPos.getY() + 0.5, (double)blockPos.getZ() + 0.5, 5.0F, true, Explosion.DestructionType.DESTROY);
     }
 
-    public static boolean isWaterThatWouldFlow(BlockPos blockPos, Level level) {
+    public static boolean isWaterThatWouldFlow(BlockPos blockPos, World level) {
         FluidState fluidState = level.getFluidState(blockPos);
-        if (!fluidState.is(FluidTags.WATER)) {
+        if (!fluidState.isIn(FluidTags.WATER)) {
             return false;
-        } else if (fluidState.isSource()) {
+        } else if (fluidState.isStill()) {
             return true;
         } else {
-            float f = (float)fluidState.getAmount();
+            float f = (float)fluidState.getLevel();
             if (f < 2.0F) {
                 return false;
             } else {
-                FluidState fluidState2 = level.getFluidState(blockPos.below());
-                return !fluidState2.is(FluidTags.WATER);
+                FluidState fluidState2 = level.getFluidState(blockPos.down());
+                return !fluidState2.isIn(FluidTags.WATER);
             }
         }
     }
 
-    public static void light(@Nullable Entity entity, Level level, BlockPos blockPos, BlockState blockState) {
-        BlockState newState = blockState.setValue(CHARGED, true);
-        level.setBlock(blockPos, newState, 3);
-        level.gameEvent(GameEvent.BLOCK_CHANGE, blockPos, GameEvent.Context.of(entity, newState));
-        level.playSound(null, blockPos, SoundEvents.END_PORTAL_FRAME_FILL, SoundSource.BLOCKS, 1.0f, 1.0f); // TODO: Better sound effects (if you want to do something and can do some sound effect stuff, dm me)
+    public static void light(@Nullable Entity entity, World level, BlockPos blockPos, BlockState blockState) {
+        BlockState newState = blockState.with(CHARGED, true);
+        level.setBlockState(blockPos, newState, 3);
+        level.emitGameEvent(GameEvent.BLOCK_CHANGE, blockPos, GameEvent.Emitter.of(entity, newState));
+        level.playSound(null, blockPos, SoundEvents.BLOCK_END_PORTAL_FRAME_FILL, SoundCategory.BLOCKS, 1.0f, 1.0f); // TODO: Better sound effects (if you want to do something and can do some sound effect stuff, dm me)
     }
 
     @Override
-    public void playerWillDestroy(Level level, BlockPos pos, BlockState blockState, Player player) {
-        ItemStack itemInMainHand = player.getItemInHand(InteractionHand.MAIN_HAND);
-        if (EnchantmentHelper.getItemEnchantmentLevel(Enchantments.SILK_TOUCH, itemInMainHand) == 0) {
+    public void onBreak(World level, BlockPos pos, BlockState blockState, PlayerEntity player) {
+        ItemStack itemInMainHand = player.getStackInHand(Hand.MAIN_HAND);
+        if (EnchantmentHelper.getLevel(Enchantments.SILK_TOUCH, itemInMainHand) == 0) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
 
             if (!(blockEntity instanceof EnderRelayBlockEntity enderRelayEntity)) {
-                super.playerWillDestroy(level, pos, blockState, player);
+                super.onBreak(level, pos, blockState, player);
                 return;
             }
             if(enderRelayEntity.hasNoLocation()) {
-                super.playerWillDestroy(level, pos, blockState, player);
+                super.onBreak(level, pos, blockState, player);
                 return;
             }
 
             ItemStack compass = new ItemStack(Items.COMPASS, 1);
-            ((CompassItem) Items.COMPASS).addLodestoneTags(level.dimension(), new BlockPos(enderRelayEntity.getX(), enderRelayEntity.getY(), enderRelayEntity.getZ()), compass.getOrCreateTag());
-            popResource(level, pos, compass);
+            ((CompassItem) Items.COMPASS).writeNbt(level.getRegistryKey(), new BlockPos(enderRelayEntity.getX(), enderRelayEntity.getY(), enderRelayEntity.getZ()), compass.getOrCreateNbt());
+            dropStack(level, pos, compass);
         }
-        super.playerWillDestroy(level, pos, blockState, player);
+        super.onBreak(level, pos, blockState, player);
     }
 
-    public static void sendToLocation(ServerPlayer player, ServerLevel level, int x, int y, int z) {
+    public static void sendToLocation(ServerPlayerEntity player, ServerWorld level, int x, int y, int z) {
         BlockPos blockPos = new BlockPos(x, y, z);
-        Optional<Vec3> pos = RespawnAnchorBlock.findStandUpPosition(EntityType.PLAYER, level, blockPos);
+        Optional<Vec3d> pos = RespawnAnchorBlock.findRespawnPosition(EntityType.PLAYER, level, blockPos);
 
         if (pos.isEmpty()) {
-            player.displayClientMessage(
-                    Component.translatable("enderrelay.obstructed_destination"),
+            player.sendMessage(
+                    Text.translatable("enderrelay.obstructed_destination"),
                     false
             );
             return;
@@ -184,43 +184,43 @@ public class EnderRelayBlock extends Block implements EntityBlock {
         // pasted code from ServerList#respawn to make it the most vanilla thing possible
         float g;
         BlockState blockState = level.getBlockState(blockPos);
-        boolean isLodestone = blockState.is(Blocks.LODESTONE);
-        Vec3 vec3 = pos.get();
+        boolean isLodestone = blockState.isOf(Blocks.LODESTONE);
+        Vec3d vec3 = pos.get();
         if (isLodestone) {
-            Vec3 vec32 = Vec3.atBottomCenterOf(blockPos).subtract(vec3).normalize();
-            g = (float) Mth.wrapDegrees(Mth.atan2(vec32.z, vec32.x) * 57.2957763671875 - 90.0);
+            Vec3d vec32 = Vec3d.ofBottomCenter(blockPos).subtract(vec3).normalize();
+            g = (float) MathHelper.wrapDegrees(MathHelper.atan2(vec32.z, vec32.x) * 57.2957763671875 - 90.0);
         } else {
-            player.displayClientMessage(
-                    Component.translatable("enderrelay.no_lodestone"),
+            player.sendMessage(
+                    Text.translatable("enderrelay.no_lodestone"),
                     false
             );
             return;
         }
 
 
-        level.playSound(null, player.getOnPos(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.BLOCKS, 1.0f, 1.0f); // TODO: Better sound effects (if you want to do something and can do some sound effect stuff, dm me)
+        level.playSound(null, player.getSteppingPos(), SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.BLOCKS, 1.0f, 1.0f); // TODO: Better sound effects (if you want to do something and can do some sound effect stuff, dm me)
 
-        player.teleportTo(level, vec3.x, vec3.y, vec3.z, g, 0.0f);
+        player.teleport(level, vec3.x, vec3.y, vec3.z, g, 0.0f);
 
         // copied from PlayerList line 427
-        while (!level.noCollision(player) && player.getY() < (double)level.getMaxBuildHeight()) {
-            player.setPos(player.getX(), player.getY() + 1.0, player.getZ());
+        while (!level.isSpaceEmpty(player) && player.getY() < (double)level.getTopY()) {
+            player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
         }
 
-        player.teleportTo(level, player.getX(), player.getY(), player.getZ(), g, 0.0f);
+        player.teleport(level, player.getX(), player.getY(), player.getZ(), g, 0.0f);
 
-        level.playSound(null, vec3.x, vec3.y, vec3.z, SoundEvents.ENDERMAN_TELEPORT, SoundSource.BLOCKS, 1.0f, 1.0f); // TODO: Better sound effects (if you want to do something and can do some sound effect stuff, dm me)
+        level.playSound(null, vec3.x, vec3.y, vec3.z, SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.BLOCKS, 1.0f, 1.0f); // TODO: Better sound effects (if you want to do something and can do some sound effect stuff, dm me)
     }
 
     @Nullable
     @Override
-    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+    public BlockEntity createBlockEntity(BlockPos pos, BlockState state) {
         return new EnderRelayBlockEntity(pos, state);
     }
 
     @Override
-    public void animateTick(BlockState blockState, Level level, BlockPos blockPos, RandomSource randomSource) {
-        if (blockState.getValue(CHARGED)) {
+    public void randomDisplayTick(BlockState blockState, World level, BlockPos blockPos, Random randomSource) {
+        if (blockState.get(CHARGED)) {
             // Mostly copied & modified from NetherPortalBlock
             double d = (double)blockPos.getX() + randomSource.nextDouble();
             double e = (double)blockPos.getY() + randomSource.nextDouble();

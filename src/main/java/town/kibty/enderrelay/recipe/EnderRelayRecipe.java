@@ -1,71 +1,55 @@
 package town.kibty.enderrelay.recipe;
 
-import com.google.gson.JsonObject;
-import net.minecraft.core.GlobalPos;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.inventory.CraftingContainer;
-import net.minecraft.world.item.*;
-import net.minecraft.world.item.crafting.CustomRecipe;
-import net.minecraft.world.item.crafting.RecipeSerializer;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
+import net.minecraft.inventory.CraftingInventory;
+import net.minecraft.item.BlockItem;
+import net.minecraft.item.CompassItem;
+import net.minecraft.item.Items;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.recipe.RecipeSerializer;
+import net.minecraft.recipe.SpecialCraftingRecipe;
+import net.minecraft.recipe.SpecialRecipeSerializer;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.math.GlobalPos;
+import net.minecraft.world.World;
+import net.minecraft.world.dimension.DimensionTypes;
 import org.jetbrains.annotations.NotNull;
 import town.kibty.enderrelay.EnderRelay;
 import town.kibty.enderrelay.block.EnderRelayBlockEntity;
 
-public class EnderRelayRecipe extends CustomRecipe {
-    public static final Item[][] RECIPE = new Item[][] {
+public class EnderRelayRecipe extends SpecialCraftingRecipe {
+    public static final net.minecraft.item.Item[][] RECIPE = new net.minecraft.item.Item[][] {
             {Items.OBSIDIAN, Items.POPPED_CHORUS_FRUIT, Items.OBSIDIAN},
             {Items.POPPED_CHORUS_FRUIT, Items.BARRIER, Items.POPPED_CHORUS_FRUIT},
             {Items.OBSIDIAN, Items.POPPED_CHORUS_FRUIT, Items.OBSIDIAN}
     };
 
-    public static final RecipeSerializer<EnderRelayRecipe> SERIALIZER = new RecipeSerializer<>() {
-        @Override
-        public EnderRelayRecipe fromJson(ResourceLocation resourceLocation, JsonObject jsonObject) {
-            return null;
-        }
-
-        @Override
-        public EnderRelayRecipe fromNetwork(ResourceLocation resourceLocation, FriendlyByteBuf friendlyByteBuf) {
-            return null;
-        }
-
-        @Override
-        public void toNetwork(FriendlyByteBuf friendlyByteBuf, EnderRelayRecipe recipe) {
-
-        }
-    };
-
-
-    public EnderRelayRecipe(ResourceLocation resourceLocation) {
+    public static final SpecialRecipeSerializer<EnderRelayRecipe> SERIALIZER = new SpecialRecipeSerializer<>(EnderRelayRecipe::new);
+    public EnderRelayRecipe(Identifier resourceLocation) {
         super(resourceLocation);
     }
 
     @Override
-    public boolean matches(CraftingContainer container, Level level) {
+    public boolean matches(CraftingInventory container, World level) {
         int i = 0;
-        for (Item[] row : RECIPE) {
-            for (Item item : row) {
-                ItemStack gotItem = container.getItem(i);
+        for (net.minecraft.item.Item[] row : RECIPE) {
+            for (net.minecraft.item.Item item : row) {
+                net.minecraft.item.ItemStack gotItem = container.getStack(i);
                 i++;
                 if (item == Items.BARRIER) {
-                    if (!gotItem.is(Items.COMPASS)) return false;
-                    if (!CompassItem.isLodestoneCompass(gotItem)) return false;
-                    assert gotItem.getTag() != null;
-                    if (CompassItem.getLodestonePosition(gotItem.getTag()) == null) return false;
-                    if (level.isClientSide) continue;
-                    GlobalPos pos = CompassItem.getLodestonePosition(gotItem.getTag());
+                    if (!gotItem.isOf(Items.COMPASS)) return false;
+                    if (!CompassItem.hasLodestone(gotItem)) return false;
+                    assert gotItem.getNbt() != null;
+                    if (CompassItem.createLodestonePos(gotItem.getNbt()) == null) return false;
+                    if (level.isClient) continue;
+                    GlobalPos pos = CompassItem.createLodestonePos(gotItem.getNbt());
                     assert pos != null;
-                    Level lodedstoneLevel = level.getServer().getLevel(pos.dimension());
-                    assert lodedstoneLevel != null;
-                    if (lodedstoneLevel.dimensionTypeId() != BuiltinDimensionTypes.END) return false;
+                    World lodestoneLevel = level.getServer().getWorld(pos.getDimension());
+                    assert lodestoneLevel != null;
+                    if (lodestoneLevel.getDimensionKey() != DimensionTypes.THE_END) return false;
 
                     continue;
                 }
-                if (!gotItem.is(item)) {
+                if (!gotItem.isOf(item)) {
                     return false;
                 }
 
@@ -74,25 +58,23 @@ public class EnderRelayRecipe extends CustomRecipe {
         return true;
     }
 
-
-
     @Override
-    public @NotNull ItemStack assemble(CraftingContainer container) {
-        ItemStack compass = container.getItem(4);
-        assert compass.getTag() != null;
-        GlobalPos pos = CompassItem.getLodestonePosition(compass.getTag());
-        ItemStack relay = new ItemStack(EnderRelay.ENDER_RELAY_ITEM, 1);
-        CompoundTag blockTag = new CompoundTag();
+    public @NotNull net.minecraft.item.ItemStack craft(CraftingInventory container) {
+        net.minecraft.item.ItemStack compass = container.getStack(4);
+        assert compass.getNbt() != null;
+        GlobalPos pos = CompassItem.createLodestonePos(compass.getNbt());
+        net.minecraft.item.ItemStack relay = new net.minecraft.item.ItemStack(EnderRelay.ENDER_RELAY_ITEM, 1);
+        NbtCompound blockTag = new NbtCompound();
 
         assert pos != null;
-        blockTag.putString(EnderRelayBlockEntity.DIMENSION_ID_KEY, pos.dimension().location().toString());
-        blockTag.putIntArray(EnderRelayBlockEntity.POSITION_KEY, new int[] { pos.pos().getX(), pos.pos().getY(), pos.pos().getZ() });
-        BlockItem.setBlockEntityData(relay, EnderRelay.ENDER_RELAY_BLOCK_ENTITY, blockTag);
+        blockTag.putString(EnderRelayBlockEntity.DIMENSION_ID_KEY, pos.getDimension().getValue().toString());
+        blockTag.putIntArray(EnderRelayBlockEntity.POSITION_KEY, new int[] { pos.getPos().getX(), pos.getPos().getY(), pos.getPos().getZ() });
+        BlockItem.setBlockEntityNbt(relay, EnderRelay.ENDER_RELAY_BLOCK_ENTITY, blockTag);
         return relay;
     }
 
     @Override
-    public boolean canCraftInDimensions(int x, int y) {
+    public boolean fits(int x, int y) {
         return x == 3 && y == 3;
     }
 
