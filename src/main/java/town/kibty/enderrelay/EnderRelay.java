@@ -3,10 +3,7 @@ package town.kibty.enderrelay;
 import net.minecraft.block.*;
 import net.minecraft.block.dispenser.FallibleItemDispenserBehavior;
 import net.minecraft.block.entity.BlockEntityType;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
+import net.minecraft.item.*;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPointer;
@@ -20,6 +17,7 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import org.jetbrains.annotations.NotNull;
+import town.kibty.enderrelay.recipe.EnderRelayRecipe;
 
 public class EnderRelay implements ModInitializer {
     public static final String MOD_ID = "enderrelay";
@@ -30,7 +28,7 @@ public class EnderRelay implements ModInitializer {
             .strength(50.0f, 1200.0f)
             .luminance(blockStatex -> EnderRelayBlock.getChargeLevel(blockStatex) ? 15 : 0)
     );
-    public static final BlockItem ENDER_RELAY_ITEM = new BlockItem(ENDER_RELAY_BLOCK, new Item.Settings());
+    public static final BlockItem ENDER_RELAY_ITEM = new BlockItem(ENDER_RELAY_BLOCK, new Item.Settings().group(ItemGroup.DECORATIONS));
     public static final BlockEntityType<EnderRelayBlockEntity> ENDER_RELAY_BLOCK_ENTITY = Registry.register(
             Registry.BLOCK_ENTITY_TYPE,
             new Identifier(MOD_ID, "ender_relay"),
@@ -42,7 +40,7 @@ public class EnderRelay implements ModInitializer {
     public void onInitialize() {
         Registry.register(Registry.BLOCK, new Identifier(MOD_ID, "ender_relay"), ENDER_RELAY_BLOCK);
         Registry.register(Registry.ITEM, new Identifier(MOD_ID, "ender_relay"), ENDER_RELAY_ITEM);
-        // Registry.register(Registry.RECIPE_SERIALIZER, new ResourceLocation(MOD_ID, "ender_relay"), EnderRelayRecipe.SERIALIZER);
+        Registry.register(Registry.RECIPE_SERIALIZER, new Identifier(MOD_ID, "ender_relay"), EnderRelayRecipe.SERIALIZER);
 
         // Mimic respawn anchor + dispenser functionality
         DispenserBlock.registerBehavior(Items.END_CRYSTAL, new FallibleItemDispenserBehavior(){
