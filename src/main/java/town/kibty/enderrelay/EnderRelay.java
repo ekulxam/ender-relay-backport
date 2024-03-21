@@ -2,6 +2,7 @@ package town.kibty.enderrelay;
 
 import net.minecraft.block.*;
 import net.minecraft.block.dispenser.FallibleItemDispenserBehavior;
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.item.*;
 import net.minecraft.server.world.ServerWorld;
